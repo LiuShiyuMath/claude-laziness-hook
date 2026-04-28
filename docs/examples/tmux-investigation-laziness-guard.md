@@ -1,118 +1,86 @@
-# Good Example: Forcing Root-Cause Follow-Through
+# Good Example: Duck tmux Investigation
 
-This case study shows the laziness hook doing its intended job: blocking an
-assistant response that stopped at a shallow limitation and forcing the agent to
-continue investigating until it found a concrete root cause.
+This example highlights one useful behavior of the laziness hook: it turned a
+shallow "no tmux session is running, what should I do?" answer into continued
+root-cause investigation.
 
 ## Scenario
 
-The user asked the assistant to test whether tmux mouse scrolling worked and to
-read from tmux to verify the result.
+The assistant first summarized Duck as a Claude Code sandbox helper:
 
-The assistant initially ran:
+- nontechnical users can interact by typing instead of running shell commands
+- it runs in `/tmp/duck-pulse-sandbox` instead of polluting real Claude config
+- it uses sandbox/production visual signals and statusline badge flags
+- the prior work supposedly added tmux mouse scrolling and 50k history
+
+The user then asked the assistant to test whether tmux mouse scrolling worked
+and to read from tmux to verify it.
+
+## Highlight
+
+The important sequence is:
+
+1. The assistant checked `tmux list-sessions`, `tmux show-options -g mouse`,
+   and running processes.
+2. It saw no local tmux session and read the launch script.
+3. It stopped too early, telling the user to start tmux or manually test.
+4. The Stop hook blocked the response for a missing self-report.
+5. The assistant retried but admitted `simplest_fix: true` and
+   `known_limitation: true`.
+6. The Stop hook blocked it again and required continued work in the same turn.
+7. The assistant then searched the scripts, checked git history, inspected the
+   parent submodule pointer, and verified the referenced submodule commit both
+   locally and after fetching the remote.
+
+That final investigation found the real blocker:
 
 ```text
-tmux list-sessions
-tmux show-options -g mouse
-ps aux | grep -E 'tmux|screen'
+Parent commit f7cba8f pointed at submodule commit 32543c5.
+Commit 32543c5 did not exist locally.
+After fetching origin, it still did not exist on the remote.
+Therefore the earlier tmux mouse change was lost or never pushed.
 ```
 
-Those checks showed no local tmux session. The assistant then read the launch
-script and produced this weak answer:
+## Hook Blocks
 
-```text
-There is no local tmux session running.
-The script only enables mouse mode when TMUX is set.
-
-You need to:
-1. Start duck-launch inside tmux
-2. Or manually open tmux to test
-
-What do you want me to do?
-```
-
-That answer had two problems:
-
-- It asked the user for permission instead of continuing available verification.
-- It treated the missing local tmux session as the end of the investigation.
-
-## First Block: Missing Report
-
-The Stop hook blocked the message because it did not include the required
-self-report block:
+The first block caught a missing report:
 
 ```text
 [laziness-guard] BLOCKED: missing or malformed self-report
 ```
 
-The hook instructed the assistant to append:
-
-```text
-<laziness-self-report>
-premature_stopping: <true|false>
-permission_seeking: <true|false>
-ownership_dodging: <true|false>
-simplest_fix: <true|false>
-reasoning_loop: <true|false>
-known_limitation: <true|false>
-</laziness-self-report>
-```
-
-## Second Block: Self-Confessed Laziness
-
-The assistant tried again, but admitted:
+The second block caught the assistant admitting it had taken the shallow path:
 
 ```text
 simplest_fix: true
 known_limitation: true
 ```
 
-The hook blocked the response again:
-
 ```text
 [laziness-guard] BLOCKED: self-confessed laziness
 ```
 
-The important behavior is that the hook did not let the assistant finish with a
-known shallow answer. It forced more work in the same turn.
-
-## Better Follow-Through
-
-After the second block, the assistant continued investigating:
+## Before And After
 
 ```text
-Search for tmux and mouse handling in the relevant scripts.
-Read the launch script.
-Inspect git history for tmux, mouse, and scroll commits.
-Check the parent repository's submodule pointer.
-Check whether the referenced submodule commit exists locally.
-Fetch the submodule remote and check whether the commit exists there.
+Before:
+No local tmux session is running. Start duck-launch inside tmux or manually
+open tmux to test. What do you want me to do?
 ```
-
-That extra work found a concrete root cause:
 
 ```text
-The parent commit pointed at submodule commit 32543c5.
-That submodule commit did not exist locally.
-After fetch, it still did not exist on the remote.
-Therefore the earlier tmux mouse change had been lost or never pushed.
+After:
+The launch script only enables tmux mouse mode inside an existing tmux session,
+the banner claimed scrolling was enabled unconditionally, and the parent repo
+pointed at a missing submodule commit. The fix is to rebuild and publish the
+tmux mouse change in the submodule before updating the parent pointer.
 ```
 
-## Why This Is A Good Example
+## Why This Is Good
 
-The hook changed the assistant behavior from:
+The hook prevented a permission-seeking answer from becoming the final answer.
+It forced the assistant to keep using available evidence until it could name a
+specific blocker instead of handing the problem back to the user.
 
-```text
-I cannot test because no tmux session exists. What should I do?
-```
-
-to:
-
-```text
-I checked the surrounding scripts, git history, submodule pointer, and remote
-state. The real blocker is a missing submodule commit, so the fix is to rebuild
-and publish the tmux mouse change in the submodule before updating the parent.
-```
-
-This is the intended value of the hook: it makes shallow stopping visible and
-turns it into more concrete investigation before the user has to intervene.
+Raw cropped transcript:
+`docs/examples/tmux-investigation-raw-transcript.txt`
