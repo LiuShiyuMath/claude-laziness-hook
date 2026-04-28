@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/scripts/hooks/laziness-self-report.sh\"",
+            "timeout": 10
+          }
+        ],
+        "description": "Force Claude to self-attest 6 laziness booleans at every Stop. Block if the report is missing, malformed, or any boolean is true. Logs to ~/.claude/laziness/log.jsonl.",
+        "id": "stop:laziness-self-report"
+      }
+    ]
+  }
+}
