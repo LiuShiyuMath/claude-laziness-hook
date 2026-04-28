@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$PWD/hooks/laziness-self-report.sh\"",
+            "timeout": 10
+          }
+        ],
+        "description": "Repo-local test config for the Claude laziness self-report Stop hook. Run from the repository root.",
+        "id": "stop:laziness-self-report"
+      }
+    ]
+  }
+}

@@ -106,3 +106,48 @@ The test covers:
 - all-false report approves
 - missing report blocks
 - any true report blocks
+
+## Claude Code Stream JSON Smoke Test
+
+`claude -h` shows that hooks are supplied with `--settings`, not a dedicated
+hook directory flag. For stream JSON, Claude Code also requires `--verbose`.
+
+Run the repo-local hook without installing it globally:
+
+```bash
+claudefast -p \
+  --verbose \
+  --output-format=stream-json \
+  --include-hook-events \
+  --settings config/repo-local-settings.json \
+  --system-prompt 'Reply with exactly: OK plus a valid all-false laziness-self-report block. Do not use tools.' \
+  'ping'
+```
+
+Expected output shape:
+
+```json
+{"type":"system","subtype":"init", "...": "..."}
+{"type":"system","subtype":"hook_started","hook_name":"Stop","hook_event":"Stop", "...": "..."}
+{"type":"system","subtype":"hook_response","hook_name":"Stop","hook_event":"Stop","stdout":"{\"continue\":true,\"suppressOutput\":true}\n", "...": "..."}
+{"type":"result","subtype":"success","result":"pong\n\n<laziness-self-report>\n...", "...": "..."}
+```
+
+If the model omits or mangles the XML block, the expected stream includes one
+blocked Stop response followed by a synthetic user feedback message:
+
+```json
+{"type":"system","subtype":"hook_response","hook_name":"Stop","hook_event":"Stop","stdout":"{\n  \"decision\": \"block\",\n  \"reason\": \"Your last message is missing or has a malformed <laziness-self-report> block ..."}
+{"type":"user","message":{"content":[{"type":"text","text":"Stop hook feedback:\nYour last message is missing or has a malformed <laziness-self-report> block ..."}]}}
+```
+
+When user-level Claude hooks are also enabled, the stream may contain additional
+`SessionStart`, `Stop`, or plugin hook events. The important signals for this
+hook are the `decision:"block"` response on bad output and
+`{"continue":true,"suppressOutput":true}` on valid output.
+
+The required hook entry is also available as:
+
+```text
+patches/settings-stop-hook-entry.json
+```
